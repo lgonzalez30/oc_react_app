@@ -1,27 +1,32 @@
-FROM nginx:alpine
+# Use the official Node.js runtime as the base image
+FROM node:18 as build
 
-LABEL maintainer="ReliefMelone"
-
+# Set the working directory in the container
 WORKDIR /app
+
+# Copy package.json and package-lock.json to the working directory
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy the entire application code to the container
 COPY . .
 
-# Install node.js
-RUN apk update && \
-    apk add nodejs npm python make curl g++
+# Build the React app for production
+RUN npm run build
+
+# Use Nginx as the production server
+FROM nginx:alpine
+RUN  touch /var/run/nginx.pid && \
+     chown -R nginx:nginx /var/cache/nginx /var/run/nginx.pid
+USER nginx
+COPY --chown=nginx:nginx my/html/files /usr/share/nginx/html
+COPY --chown=nginx:nginx config/myapp/default.conf /etc/nginx/conf.d/default.conf
 
 
-# Build Application
-RUN npm install
-RUN ./node_modules/@angular/cli/bin/ng build --configuration=${BUILD_CONFIG}
-RUN cp -r ./dist/. /usr/share/nginx/html
-
-# Configure NGINX
-COPY ./openshift/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY ./openshift/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf
-
-RUN chgrp -R root /var/cache/nginx /var/run /var/log/nginx && \
-    chmod -R 770 /var/cache/nginx /var/run /var/log/nginx
-
+# Expose port 80 for the Nginx server
 EXPOSE 8080
 
+# Start Nginx when the container runs
 CMD ["nginx", "-g", "daemon off;"]
